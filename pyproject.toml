@@ -2,7 +2,7 @@
 name = "logstah-py"
 version = "0.1.0"
 description = "Python multi-process version reads kafka and writes to mongo, works and configures like logstash"
-authors = ["lianpengcheng <Johnny@.cn>"]
+authors = ["Johnng <Johnny@.cn>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
