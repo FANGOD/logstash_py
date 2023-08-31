@@ -11,13 +11,15 @@ Python multi-process version reads kafka and writes to mongo, works and configur
   * 多向扩展: 横向任务并发, 纵向多任务, 每个任务支持多个output(未测试); 暂不支持多input(多input请使用logstash);
   * 轻量镜像: 仅依赖python pymongo kafka-python pyyaml等包
 
+
 ```
-example_1:
+default_example:
   pipeline:
     id: "example_to_mongo_1"
     workers: 2
-    batch.size: 1000
-    queue.max_bytes: "1g"
+    # don's set the value too large
+    batch.size: 500
+    alert: "johnny"
   input:
     kafka:
       bootstrap_servers: "127.0.0.1:9092"
@@ -26,14 +28,15 @@ example_1:
       auto_offset_reset: "latest"
   filter:
     python:
-      script: "scripts/transform_example.py"
+      script: "scripts/transform_quake.py"
   output:
-    mongodb:
-      uri: "mongodb://mongo:password@127.0.0.1:30079"
-      database: "db"
-      collection: "test"
-      readPreference: "secondaryPreferred"
-      maxPoolSize: 100
-      serverSelectionTimeoutMS: 500000
-      socketTimeoutMS: 600000
+    - mongodb:
+        uri: "mongodb://mongo:password@127.0.0.1:30079"
+        database: "db"
+        collection: "test"
+        readPreference: "secondaryPreferred"
+        maxPoolSize: 100
+        serverSelectionTimeoutMS: 500000
+        socketTimeoutMS: 600000
 ```
+
