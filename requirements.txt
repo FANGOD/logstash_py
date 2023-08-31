@@ -1,0 +1,4 @@
+loguru
+kafka-python
+pymongo
+PyYAML
