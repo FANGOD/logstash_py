@@ -17,7 +17,6 @@ default_example:
   pipeline:
     id: "example_to_mongo_1"
     workers: 2
-    # don's set the value too large
     batch.size: 500
     alert: "johnny"
   input:
