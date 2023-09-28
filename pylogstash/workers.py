@@ -1,9 +1,3 @@
-# coding: utf-8
-"""
-User Name: johnnhy@.cn
-Date Time: 2023-08-23 10:33:22
-File Name: workers.py @v1.0
-"""
 from importlib import import_module
 # sys
 import os
@@ -60,7 +54,7 @@ def default_doc_haneler(doc):
 
 class Mongodb(object):
 
-    def __init__(self, logger, uri, database, collection, **kwargs):
+    def __init__(self, logger, display_pec, uri, database, collection, **kwargs):
         self.logger = logger
 
         handler_file = kwargs.pop("script", "").replace("/", ".").split(".py")[0]
@@ -74,10 +68,11 @@ class Mongodb(object):
         self.collection = db[collection]
         self.test()
         self.display_cnt = 0
-        self.display_pec = 100
+        self.display_pec = display_pec
 
     def bulk(self, bulks, exit=False, check=None, **kwargs):
         try:
+            _from = "bulk"
             _deal_t = time.time()
             _bulk = []
             for data in bulks:
@@ -92,23 +87,22 @@ class Mongodb(object):
             bulk_api_result["upserted"] = len(bulk_api_result["upserted"])
             write_t = time.time() - _write_t
 
-            if self.display_cnt == 0 or exit or check == "timer":
+            self.display_cnt += 1
+            if self.display_cnt == self.display_pec or exit or check == "time":
                 if exit:
                     _from = "Cleanup"
                 else:
-                    _from = f"{int(100/self.display_pec)}% Display"
-
-                self.logger.success(f"check_{check}::{_from}:: bulk data:{bulk_api_result} read_t:{kwargs['read_t']:.4f} deal_t:{deal_t:.4f} write_t:{write_t:.4f}")
-            self.display_cnt += 1
-            if self.display_cnt == self.display_pec - 1:
+                    _from = f"display_{int(100/(self.display_pec))}% "
                 self.display_cnt = 0
+                self.logger.success(f"check_{check}:{len(bulks)} from:{_from} {bulk_api_result} RT:{kwargs['read_t']:.4f} DT:{deal_t:.4f} WT:{write_t:.4f}")
+
         except BulkWriteError as bwe:
             write_t = time.time() - _write_t
             bulk_api_result = bwe.details
             bulk_api_result["upserted"] = len(bulk_api_result["upserted"])
             if bwe._OperationFailure__code == 65:
                 bulk_api_result["writeErrors"] = len(bulk_api_result["writeErrors"])
-                self.logger.info(f"bulk data:{bulk_api_result} read_t:{kwargs['read_t']:.4f} deal_t:{deal_t:.4f} write_t:{write_t:.4f}")
+                self.logger.info(f"check_{check}:{len(bulks)} from:{_from} {bulk_api_result} RT:{kwargs['read_t']:.4f} DT:{deal_t:.4f} WT:{write_t:.4f}")
             else:
                 self.logger.exception("Uncaught exc: ")
         except KeyboardInterrupt:
@@ -132,6 +126,7 @@ def kafka_reader(**kwargs):
     logger = logger.bind(pid=os.getpid())
     logger = logger.patch(lambda record: record.update(name="workers"))
 
+    display_pec = kwargs["pipeline"].get("display.pec", 1)
     batch_size = kwargs["pipeline"].get("batch.size", 1000)
     if batch_size >= 10000:
         logger.error(f"Too big batch size to write subprocess, maybe lost data when stop")
@@ -145,7 +140,7 @@ def kafka_reader(**kwargs):
     for _output in kwargs["output"]:
         for out_type in _output:
             if out_type == "mongodb":
-                writer_handler = Mongodb(logger, **kwargs.get("filter", {"python": {}})["python"], **_output[out_type])
+                writer_handler = Mongodb(logger, display_pec, **kwargs.get("filter", {"python": {}})["python"], **_output[out_type])
                 writers.append(writer_handler)
 
     if not writers:
@@ -158,7 +153,7 @@ def kafka_reader(**kwargs):
     timer = None
     exit = False
 
-    def process_bulks(check="bulks"):
+    def process_bulks(check="bulk"):
         nonlocal bulks, start_t, exit, timer
         if timer:
             timer.cancel()
@@ -184,7 +179,7 @@ def kafka_reader(**kwargs):
             if len(bulks) >= batch_size:
                 process_bulks()
             elif timer is None:
-                timer = threading.Timer(60, process_bulks, args=("timer",))
+                timer = threading.Timer(60, process_bulks, args=("time",))
                 timer.start()
     except KeyboardInterrupt:
         if bulks:
@@ -287,6 +282,8 @@ class ProcessManager:
 
             logger.info(f"Send KeyboardInterrupt to main: {pid}")
             os.kill(pid, 2)
+        except ProcessLookupError as e:
+            logger.warning(f"Not found process: {e}")
         except Exception as e:
             logger.exception(f"An error occurred: {e}")
 
